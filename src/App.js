@@ -198,10 +198,10 @@ function App() {
         <Container maxWidth="xl" sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           <Box textAlign="center" mb={4}>
             <Typography variant="h2" gutterBottom sx={{ color: '#0f172a', fontWeight: 600, letterSpacing: '-0.02em' }}>
-              Autism & Age Detection AI
+              Autism Detection AI
             </Typography>
             <Typography variant="h6" color="text.secondary" sx={{ mt: 2, fontWeight: 400 }}>
-              Advanced AI-powered autism and age screening through facial analysis
+              Advanced AI-powered autism screening through facial analysis
             </Typography>
           </Box>
 
