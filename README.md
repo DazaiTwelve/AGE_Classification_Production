@@ -4,17 +4,19 @@ A modern React application for AI-powered autism screening through image analysi
 
 ## Features
 
-### 🎨 Modern UI Design
+### 🎨 Modern Material-UI Design
 - **Responsive Layout**: Side-by-side panels on desktop, stacked on mobile
-- **Professional Styling**: Clean, modern design with gradient backgrounds
+- **Professional Styling**: Clean, modern Material-UI design with gradient backgrounds
 - **Card-based Interface**: Two main panels for upload and results
 - **Visual Feedback**: Loading states, hover effects, and smooth transitions
+- **Snackbar Notifications**: Real-time feedback for user actions
 
 ### 📁 File Upload System
 - **Drag & Drop**: Intuitive file upload with visual feedback
 - **File Validation**: Supports JPG, PNG, GIF with 10MB size limit
 - **Image Preview**: Shows selected image before analysis
-- **Multiple Upload Methods**: Click to browse or drag and drop
+- **Multiple Upload Methods**: Click to browse, drag and drop, or webcam capture
+- **Webcam Integration**: Capture images directly from camera
 
 ### 🔍 Analysis Features
 - **AI Integration**: Connects to autism detection API
@@ -25,14 +27,16 @@ A modern React application for AI-powered autism screening through image analysi
 ### 📊 Results Display
 - **Annotated Images**: Shows analysis results with visual annotations
 - **Detailed Tables**: Region-specific predictions with confidence scores
-- **Final Decision**: Prominent display of overall assessment
+- **Final Decision**: Prominent display of overall assessment with color coding
 - **Age Detection**: Shows detected age(s) from analysis
+- **Confidence Chips**: Color-coded confidence levels for easy interpretation
 
 ### ⚠️ Error Handling
 - **Comprehensive Validation**: File type, size, and format checking
 - **Network Error Handling**: Graceful handling of API failures
 - **User-friendly Messages**: Clear, actionable error messages
-- **Dismissible Alerts**: Modern alert system for error display
+- **Snackbar Notifications**: Modern notification system for errors and success
+- **Timeout Handling**: Automatic timeout for long-running requests
 
 ### 📱 Responsive Design
 - **Mobile Optimized**: Full functionality on mobile devices
@@ -53,6 +57,7 @@ https://age-api-zzc8.onrender.com/process
    - Displays region-specific predictions (eyes, nose, lips) with confidence scores
    - Shows final decision (e.g., "autistic Moderate")
    - Lists detected age(s) with bounding box coordinates
+   - Displays age summary with children/adults count
 
 2. **Adult Invalid** (`status: "adult_invalid"`)
    - Shows age-annotated image
@@ -114,9 +119,11 @@ This creates an optimized build in the `build` folder.
 
 ### Architecture
 - **React 18**: Modern React with hooks
+- **Material-UI**: Professional UI components and theming
 - **Functional Components**: All components use functional style
 - **CSS Grid**: Responsive layout system
 - **FormData API**: File upload handling
+- **Webcam Integration**: Real-time camera capture
 
 ### State Management
 - **useState**: Local component state

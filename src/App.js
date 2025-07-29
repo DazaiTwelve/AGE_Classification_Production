@@ -1,463 +1,461 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
+import {
+  ThemeProvider, createTheme, CssBaseline, Container,
+  Box, Typography, Card, CardContent, Button,
+  CircularProgress, Alert, Grid, Snackbar, Chip,
+} from '@mui/material';
+import {
+  CloudUpload as CloudUploadIcon,
+  Psychology as PsychologyIcon,
+  Refresh as RefreshIcon,
+  Error as ErrorIcon,
+  CameraAlt as CameraIcon,
+} from '@mui/icons-material';
+import Webcam from 'react-webcam';
+import { analyzeImage, formatFileSize } from './utils/api';
+import config from './config';
+import './App.css';
 
-// Cloud icon component
-const CloudIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M7 16C4.79 16 3 14.21 3 12C3 9.79 4.79 8 7 8C7.19 8 7.38 8.01 7.56 8.03C8.54 6.69 10.06 6 11.7 6C14.55 6 16.9 8.35 16.9 11.2C16.9 11.21 16.9 11.22 16.9 11.23C17.5 11.23 18 11.73 18 12.33C18 12.93 17.5 13.43 16.9 13.43H7Z" fill="currentColor"/>
-  </svg>
-);
+const theme = createTheme({
+  palette: {
+    primary: { main: '#1e293b' },
+    secondary: { main: '#64748b' },
+    background: { default: '#ffffff', paper: '#ffffff' },
+    text: { primary: '#0f172a', secondary: '#475569' },
+  },
+  typography: {
+    fontFamily: '"Inter", "SF Pro Display", "Segoe UI", "Roboto", "Helvetica", "Arial", sans-serif',
+    h2: { fontWeight: 600, letterSpacing: '-0.02em', fontSize: '2.5rem' },
+    h6: { fontWeight: 600 },
+  },
+  shape: { borderRadius: 12 },
+});
 
-// Camera icon component
-const CameraIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" fill="currentColor"/>
-    <path d="M9 2L7.17 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4H16.83L15 2H9ZM12 17C9.24 17 7 14.76 7 12C7 9.24 9.24 7 12 7C14.76 7 17 9.24 17 12C17 14.76 14.76 17 12 17Z" fill="currentColor"/>
-  </svg>
-);
-
-// Alert component for error messages
-const Alert = ({ message, type = 'error', onClose }) => {
-  if (!message) return null;
-  
-  return (
-    <div className={`alert alert-${type}`}>
-      <span>{message}</span>
-      <button className="alert-close" onClick={onClose}>
-        ×
-      </button>
-    </div>
-  );
-};
-
-// Loading spinner component
-const LoadingSpinner = () => (
-  <div className="loading-spinner"></div>
-);
-
-// Confidence level component with color coding
-const ConfidenceLevel = ({ confidence }) => {
-  const getConfidenceClass = (confidence) => {
-    if (confidence >= 70) return 'confidence-high';
-    if (confidence >= 40) return 'confidence-medium';
-    return 'confidence-low';
-  };
-
-  return (
-    <span className={getConfidenceClass(confidence)}>
-      {confidence}%
-    </span>
-  );
-};
-
-// Prediction table component
-const PredictionTable = ({ results }) => {
-  if (!results || !Array.isArray(results)) return null;
-
-  // Filter out the final_decision entry and only show region predictions
-  const regionResults = results.filter(result => result.region);
-  
-  return (
-    <table className="prediction-table">
-      <thead>
-        <tr>
-          <th>Region</th>
-          <th>Label</th>
-          <th>Confidence</th>
-        </tr>
-      </thead>
-      <tbody>
-        {regionResults.map((result, index) => (
-          <tr key={index}>
-            <td style={{ textTransform: 'capitalize' }}>{result.region}</td>
-            <td>{result.label || 'N/A'}</td>
-            <td>
-              <ConfidenceLevel confidence={result.confidence || 0} />
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-};
-
-// Age summary component
-const AgeSummary = ({ ageCheckSummary }) => {
-  if (!ageCheckSummary || !ageCheckSummary.annotations) return null;
-
-  const ages = ageCheckSummary.annotations;
-  
-  const renderAge = (age, index) => {
-    // Handle different age data types
-    if (typeof age === 'object' && age !== null) {
-      // If age is an object with age and box properties
-      if (age.age !== undefined) {
-        return (
-          <p key={index}>
-            Age: {age.age}
-            {age.box && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: '0.5rem' }}>
-              (Box: {JSON.stringify(age.box)})
-            </span>}
-          </p>
-        );
-      }
-      // If it's some other object, stringify it
-      return <p key={index}>Age: {JSON.stringify(age)}</p>;
-    }
-    
-    // Handle primitive values
-    return <p key={index}>Age: {String(age)}</p>;
-  };
-  
-  return (
-    <div className="age-summary">
-      <h4>Detected Age(s)</h4>
-      {Array.isArray(ages) ? 
-        ages.map(renderAge)
-        : 
-        renderAge(ages, 0)
-      }
-    </div>
-  );
-};
-
-// Main App component
 function App() {
-  // State management
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [backendMessage, setBackendMessage] = useState('');
+  const [ageAnnotatedImageUrl, setAgeAnnotatedImageUrl] = useState(null);
+  const [autismAnnotatedImageUrl, setAutismAnnotatedImageUrl] = useState(null);
+  const [ageAnalysis, setAgeAnalysis] = useState({});
+  const [autismAnalysis, setAutismAnalysis] = useState({});
   const [error, setError] = useState(null);
-  const [result, setResult] = useState(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  
-  const fileInputRef = useRef(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
 
-  // File validation
-  const validateFile = (file) => {
-    if (!file) {
-      setError('No file selected');
-      return false;
-    }
+  const webcamRef = useRef(null);
+  const [showWebcam, setShowWebcam] = useState(false);
 
-    if (!file.type.startsWith('image/')) {
-      setError('Invalid file type. Please select an image file.');
-      return false;
-    }
-
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      setError('File too large. Please select an image smaller than 10MB.');
-      return false;
-    }
-
-    return true;
-  };
-
-  // Handle file selection
-  const handleFileSelect = useCallback((file) => {
-    setError(null);
-    setResult(null);
-
-    if (!validateFile(file)) {
-      return;
-    }
-
-    setSelectedFile(file);
-    
-    // Create preview URL
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-  }, []);
-
-  // Handle file input change
-  const handleFileInputChange = (event) => {
+  // Image upload handler
+  const handleImageSelect = (event) => {
     const file = event.target.files[0];
-    handleFileSelect(file);
-  };
-
-  // Handle drag and drop
-  const handleDragOver = (event) => {
-    event.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (event) => {
-    event.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (event) => {
-    event.preventDefault();
-    setIsDragOver(false);
-    
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-      handleFileSelect(files[0]);
-    }
-  };
-
-  // Handle upload area click
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  // Handle webcam button (no-op as specified)
-  const handleWebcam = () => {
-    // No-op as specified in requirements
-    console.log('Webcam functionality not implemented');
-  };
-
-  // Handle reset
-  const handleReset = () => {
-    setSelectedFile(null);
-    setPreviewUrl(null);
-    setError(null);
-    setResult(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  // Handle analyze
-  const handleAnalyze = async () => {
-    if (!selectedFile) {
-      setError('Please select an image first');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-
-      const response = await fetch('https://age-api-zzc8.onrender.com/process', {
-        method: 'POST',
-        body: formData,
+    if (file) {
+      setSelectedImage(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      resetStateExceptImage();
+      setSnackbar({
+        open: true,
+        message: `Image uploaded: ${file.name} (${formatFileSize(file.size)})`,
+        severity: 'success',
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      // Validate response structure
-      if (!data || typeof data !== 'object') {
-        throw new Error('Unexpected result format');
-      }
-
-      setResult(data);
-    } catch (error) {
-      console.error('Analysis error:', error);
-      
-      if (error.message.includes('Failed to fetch')) {
-        setError('Network error. Please check your connection and try again.');
-      } else if (error.message.includes('HTTP error')) {
-        setError('Server error. Please try again later.');
-      } else {
-        setError(error.message || 'An unexpected error occurred. Please try again.');
-      }
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  // Render results based on API response
-  const renderResults = () => {
-    if (isLoading) {
-      return (
-        <div className="results-loading">
-          <LoadingSpinner />
-          <p>Analyzing image...</p>
-        </div>
-      );
-    }
+  // Webcam capture handler
+  const captureFromWebcam = () => {
+    const screenshot = webcamRef.current.getScreenshot();
+    fetch(screenshot)
+      .then(res => res.blob())
+      .then(blob => {
+        const webcamFile = new File([blob], 'webcam-capture.jpg', { type: 'image/jpeg' });
+        setSelectedImage(webcamFile);
+        setPreviewUrl(screenshot);
+        resetStateExceptImage();
+        setSnackbar({
+          open: true,
+          message: 'Image captured from webcam',
+          severity: 'success',
+        });
+      });
+  };
 
-    if (!result) {
-      return (
-        <div className="results-content">
-          <p style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>
-            Upload an image and click "Analyze" to get started
-          </p>
-        </div>
-      );
-    }
+  // Reset all state except image and preview URL
+  const resetStateExceptImage = () => {
+    setAgeAnalysis({});
+    setAutismAnalysis({});
+    setAutismAnnotatedImageUrl(null);
+    setAgeAnnotatedImageUrl(null);
+    setBackendMessage('');
+    setError(null);
+  };
 
-    // Add error boundary for unexpected data structures
+  // Analyze button handler
+  const handleAnalyze = async () => {
+    if (!selectedImage) return;
+
+    setIsProcessing(true);
+    resetStateExceptImage();
+
     try {
+      const res = await analyzeImage(selectedImage);
+      console.log('🔍 Full API Response:', res);
 
-    // Handle different response statuses
-    if (result.status === 'child_autism_screened') {
-      return (
-        <div className="results-content">
-          {/* Show annotated image if available */}
-          {result.autism_prediction_data?.annotated_image_path && (
-            <img 
-              src={result.autism_prediction_data.annotated_image_path.startsWith('http') 
-                ? result.autism_prediction_data.annotated_image_path 
-                : `https://age-api-zzc8.onrender.com${result.autism_prediction_data.annotated_image_path}`
-              }
-              alt="Analysis result"
-              className="result-image"
-            />
-          )}
+      // Show backend message prominently
+      setBackendMessage(res.message || '');
 
-          {/* Show predictions table */}
-          {result.autism_prediction_data?.results && (
-            <PredictionTable results={result.autism_prediction_data.results} />
-          )}
+      // Extract and normalize age annotated image and analysis details
+      if (res.age_check_summary && res.age_check_summary.annotated_image_url) {
+        const url = res.age_check_summary.annotated_image_url.startsWith('http')
+          ? res.age_check_summary.annotated_image_url
+          : `${config.API_BASE_URL}${res.age_check_summary.annotated_image_url}`;
+        setAgeAnnotatedImageUrl(url);
+        setAgeAnalysis(res.age_check_summary || {});
+      }
 
-          {/* Show final decision */}
-          {result.autism_prediction_data?.results && (
-            (() => {
-              const finalDecision = result.autism_prediction_data.results.find(r => r.final_decision);
-              return finalDecision ? (
-                <div className={`final-decision ${finalDecision.final_decision.toLowerCase().includes('autistic') ? 'autistic' : 'non-autistic'}`}>
-                  {finalDecision.final_decision}
-                </div>
-              ) : null;
-            })()
-          )}
+      // ✅ KEY ADDITION: Handle autism data only if not adult_invalid
+      if (res.autism_prediction_data && res.autism_prediction_data.annotated_image_path) {
+        if (res.status === 'adult_invalid') {
+          // Console warning for adult invalid
+          console.warn('⚠️ AUTISM SCANNING DISABLED: Adult detected (ages above 18). Autism analysis cannot be performed on adult subjects.');
+          
+          // Clear autism data for adults
+          setAutismAnnotatedImageUrl(null);
+          setAutismAnalysis({});
+        } else {
+          // Process autism data for valid child subjects
+          const url = res.autism_prediction_data.annotated_image_path.startsWith('http')
+            ? res.autism_prediction_data.annotated_image_path
+            : `${config.API_BASE_URL}${res.autism_prediction_data.annotated_image_path}`;
+          setAutismAnnotatedImageUrl(url);
+          setAutismAnalysis(res.autism_prediction_data || {});
+        }
+      } else {
+        // Clear autism info if missing
+        setAutismAnnotatedImageUrl(null);
+        setAutismAnalysis({});
+      }
 
-          {/* Show age summary */}
-          <AgeSummary ageCheckSummary={result.age_check_summary} />
-        </div>
-      );
+      // Additional console logging for adult_invalid status
+      if (res.status === 'adult_invalid') {
+        console.warn('🚫 ADULT INPUT REJECTED: The uploaded image contains only adults. Autism screening requires subjects under 18 years of age.');
+      }
+
+      setSnackbar({
+        open: true,
+        message: res.message || 'Analysis complete.',
+        severity: res.status === 'adult_invalid' ? 'warning' : 'success',
+      });
+    } catch (err) {
+      setError(err.message);
+      setSnackbar({
+        open: true,
+        message: err.message,
+        severity: 'error',
+      });
+    } finally {
+      setIsProcessing(false);
     }
+  };
 
-    if (result.status === 'adult_invalid') {
-      return (
-        <div className="results-content">
-          {/* Show age-annotated image if available */}
-          {result.annotated_image_url && (
-            <img 
-              src={result.annotated_image_url.startsWith('http') 
-                ? result.annotated_image_url 
-                : `https://age-api-zzc8.onrender.com${result.annotated_image_url}`
-              }
-              alt="Age analysis result"
-              className="result-image"
-            />
-          )}
+  // Reset all state and image selections
+  const handleReset = () => {
+    setSelectedImage(null);
+    setPreviewUrl(null);
+    setAgeAnalysis({});
+    setAutismAnalysis({});
+    setAgeAnnotatedImageUrl(null);
+    setAutismAnnotatedImageUrl(null);
+    setBackendMessage('');
+    setError(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  };
 
-          <div className="adult-invalid">
-            You are an adult. Invalid.
-          </div>
+  const handleCloseSnackbar = () => setSnackbar({ ...snackbar, open: false });
 
-          {/* Show age summary */}
-          <AgeSummary ageCheckSummary={result.age_check_summary} />
-        </div>
-      );
-    }
-
-    // Handle unexpected response format
-    return (
-      <div className="results-content">
-        <p style={{ color: '#c53030', textAlign: 'center', padding: '2rem' }}>
-          Unexpected result format. Please try again.
-        </p>
-      </div>
+  // Component for confidence chip
+  const ConfidenceLevel = ({ confidence }) => {
+    const getConfidenceColor = (conf) => (
+      conf >= 70 ? '#16a34a' : conf >= 40 ? '#ca8a04' : '#dc2626'
     );
-    } catch (error) {
-      console.error('Error rendering results:', error);
-      return (
-        <div className="results-content">
-          <p style={{ color: '#c53030', textAlign: 'center', padding: '2rem' }}>
-            Error displaying results. Please try again.
-          </p>
-        </div>
-      );
-    }
+    return (
+      <Chip
+        label={`${confidence.toFixed(1)}%`}
+        size="small"
+        variant="outlined"
+        sx={{
+          borderColor: getConfidenceColor(confidence),
+          color: getConfidenceColor(confidence),
+          fontWeight: 600,
+        }}
+      />
+    );
   };
 
   return (
-    <div className="app-container">
-      <h1 className="main-heading">Autism Detection AI</h1>
-      
-      <div className="main-content">
-        {/* Upload Panel */}
-        <div className="card">
-          <h2>
-            <CloudIcon />
-            Upload or Capture Image
-          </h2>
-          
-          <div 
-            className={`upload-area ${isDragOver ? 'dragover' : ''}`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={handleUploadClick}
-          >
-            <div className="upload-icon">☁️</div>
-            <div className="upload-text">Click to upload or drag and drop</div>
-            <div className="upload-hint">Supports: JPG, PNG, GIF (Max 10MB)</div>
-          </div>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', py: 4, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <Container maxWidth="xl" sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <Box textAlign="center" mb={4}>
+            <Typography variant="h2" gutterBottom sx={{ color: '#0f172a', fontWeight: 600, letterSpacing: '-0.02em' }}>
+              Autism & Age Detection AI
+            </Typography>
+            <Typography variant="h6" color="text.secondary" sx={{ mt: 2, fontWeight: 400 }}>
+              Advanced AI-powered autism and age screening through facial analysis
+            </Typography>
+          </Box>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileInputChange}
-            className="file-input"
-          />
+          <Grid container spacing={4} sx={{ flex: 1, overflow: 'visible' }}>
+            {/* Upload Section */}
+            <Grid item xs={12} lg={4}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h5" gutterBottom sx={{ color: '#0f172a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CloudUploadIcon sx={{ fontSize: 24, color: '#1e293b' }} />
+                    Upload or Capture Image
+                  </Typography>
+                  <Box
+                    onClick={() => document.getElementById('image-input').click()}
+                    sx={{
+                      border: '2px dashed #e2e8f0', p: 4, textAlign: 'center', cursor: 'pointer',
+                      borderRadius: 3, bgcolor: '#fafafa', transition: 'all 0.2s ease',
+                      '&:hover': { borderColor: '#1e293b', bgcolor: '#f5f5f5' },
+                    }}
+                  >
+                    <input id="image-input" type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
+                    <CloudUploadIcon sx={{ fontSize: 48, color: '#475569', mb: 2 }} />
+                    <Typography variant="h6" sx={{ color: '#0f172a', mb: 1, fontWeight: 600 }}>Upload Image</Typography>
+                    <Typography variant="body2" sx={{ color: '#475569' }}>Drag & drop or click to browse</Typography>
+                  </Box>
+                  <Box mt={3} textAlign="center">
+                    <Button
+                      variant="outlined"
+                      startIcon={<CameraIcon />}
+                      onClick={() => setShowWebcam(!showWebcam)}
+                      sx={{ mb: 2, borderColor: '#e2e8f0', color: '#475569', '&:hover': { borderColor: '#1e293b', color: '#1e293b' } }}
+                    >
+                      {showWebcam ? 'Hide Camera' : 'Open Camera'}
+                    </Button>
+                    {showWebcam && (
+                      <Box className="webcam-container">
+                        <Box sx={{ border: '1px solid #f1f5f9', borderRadius: 3, p: 2, bgcolor: '#fafafa' }}>
+                          <Webcam
+                            audio={false}
+                            ref={webcamRef}
+                            screenshotFormat="image/jpeg"
+                            width={320}
+                            height={240}
+                            style={{ borderRadius: 8, border: '1px solid #f1f5f9' }}
+                          />
+                        </Box>
+                        <Button onClick={captureFromWebcam} variant="contained" startIcon={<CameraIcon />} sx={{ mt: 2, bgcolor: '#1e293b', '&:hover': { bgcolor: '#0f172a' } }}>
+                          Capture Photo
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                  {previewUrl && (
+                    <Box className="image-preview">
+                      <img
+                        src={previewUrl}
+                        alt="Preview"
+                        style={{ maxWidth: 400, maxHeight: 300, borderRadius: 8, border: '2px solid #e0e0e0', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      />
+                      <Typography variant="body2" mt={1} color="text.secondary">
+                        {selectedImage?.name || 'Captured Image'}
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box className="action-buttons">
+                    <Button
+                      variant="contained"
+                      onClick={handleAnalyze}
+                      disabled={!selectedImage || isProcessing}
+                      startIcon={isProcessing ? <CircularProgress size={20} /> : <PsychologyIcon />}
+                      size="large"
+                      sx={{ bgcolor: '#1e293b', '&:hover': { bgcolor: '#0f172a' }, '&:disabled': { bgcolor: '#e2e8f0', color: '#94a3b8' } }}
+                    >
+                      {isProcessing ? 'Analyzing...' : 'Analyze'}
+                    </Button>
+                    <Button variant="outlined" onClick={handleReset} disabled={isProcessing} startIcon={<RefreshIcon />} size="large"
+                      sx={{ borderColor: '#e2e8f0', color: '#475569', '&:hover': { borderColor: '#1e293b', color: '#1e293b' }, '&:disabled': { borderColor: '#f1f5f9', color: '#cbd5e1' } }}>
+                      Reset
+                    </Button>
+                  </Box>
+                  {error && (
+                    <Alert severity="error" sx={{ mt: 2 }}>
+                      <ErrorIcon sx={{ mr: 1 }} />
+                      {error}
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
 
-          {/* Image preview */}
-          {previewUrl && (
-            <div className="image-preview">
-              <img src={previewUrl} alt="Preview" />
-            </div>
-          )}
+            {/* Results Section */}
+            <Grid item xs={12} lg={8}>
+              <Grid container spacing={2}>
+                {/* Age Detection Card */}
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6" sx={{ color: '#1e293b', mb: 1, fontWeight: 600 }}>
+                        Age Detection Visualization
+                      </Typography>
+                      {/* Show backend message if it's an adult_invalid or error */}
+                      {backendMessage && (backendMessage.toLowerCase().includes('adult') || backendMessage.toLowerCase().includes('invalid') || backendMessage.toLowerCase().includes('error')) && (
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                          <strong>Adult Detected:</strong> {backendMessage}
+                        </Alert>
+                      )}
+                      {ageAnnotatedImageUrl && (
+                        <img
+                          src={ageAnnotatedImageUrl}
+                          alt="Age Detection Visualization"
+                          style={{
+                            width: '100%',
+                            maxWidth: '350px',
+                            height: 'auto',
+                            borderRadius: 8,
+                            border: '1px solid #f1f5f9',
+                            display: 'block',
+                            margin: '0 auto',
+                            marginBottom: 14,
+                          }}
+                        />
+                      )}
+                      {ageAnalysis && (ageAnalysis.kids_count !== undefined || ageAnalysis.adults_count !== undefined) && (
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                            Faces Detected: <strong>{(ageAnalysis.kids_count ?? 0) + (ageAnalysis.adults_count ?? 0)}</strong>
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            Kids: <strong>{ageAnalysis.kids_count ?? 0}</strong> &nbsp;|&nbsp;
+                            Adults: <strong>{ageAnalysis.adults_count ?? 0}</strong>
+                          </Typography>
+                          {Array.isArray(ageAnalysis.annotations) && ageAnalysis.annotations.length > 0 && (
+                            <>
+                              <Typography variant="body2" sx={{ fontWeight: 600, mt: 1 }}>Detected Age Groups:</Typography>
+                              {ageAnalysis.annotations.map((ann, idx) => (
+                                <Box key={idx} sx={{ border: '1px solid #e0e7ef', borderRadius: 1, p: 1, mb: 1 }}>
+                                  <Typography variant="body2" sx={{ color: '#0f172a', fontWeight: 600 }}>
+                                    Age: {ann.age}
+                                  </Typography>
+                                  {ann.box && (
+                                    <Typography variant="caption" sx={{ color: '#475569' }}>
+                                      Bounding Box: [{ann.box.join(', ')}]
+                                    </Typography>
+                                  )}
+                                </Box>
+                              ))}
+                            </>
+                          )}
+                          {ageAnalysis.has_faces === false && (
+                            <Typography sx={{ color: "#f44336", mt: 1, fontWeight: 600 }}>No faces detected.</Typography>
+                          )}
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
 
-          {/* Action buttons */}
-          <div className="button-group">
-            <button 
-              className="btn btn-secondary" 
-              onClick={handleWebcam}
-              disabled={isLoading}
-            >
-              <CameraIcon />
-              Webcam
-            </button>
-            
-            <button 
-              className="btn btn-primary" 
-              onClick={handleAnalyze}
-              disabled={!selectedFile || isLoading}
-            >
-              {isLoading ? <LoadingSpinner /> : '🔍'}
-              {isLoading ? 'Analyzing...' : 'Analyze'}
-            </button>
-            
-            <button 
-              className="btn btn-secondary" 
-              onClick={handleReset}
-              disabled={isLoading}
-            >
-              🔄 Reset
-            </button>
-          </div>
-        </div>
+                {/* Autism Analysis Card */}
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6" sx={{ color: '#dc2626', mb: 1, fontWeight: 600 }}>
+                        Autism Analysis Visualization
+                      </Typography>
+                      
+                      {/* ✅ KEY ADDITION: Special notice for adult_invalid status */}
+                      {backendMessage && backendMessage.toLowerCase().includes('adult') && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                          <strong>⚠️ Autism Scanning Disabled</strong>
+                          <br />
+                          Autism analysis cannot be performed on subjects above 18 years of age. Please upload an image containing children for autism screening.
+                        </Alert>
+                      )}
 
-        {/* Results Panel */}
-        <div className="card">
-          <h2>📊 Analysis Results</h2>
-          
-          {/* Error alert */}
-          <Alert 
-            message={error} 
-            type="error" 
-            onClose={() => setError(null)} 
-          />
-          
-          {/* Results content */}
-          {renderResults()}
-        </div>
-      </div>
-    </div>
+                      {/* Show autism annotated image if present */}
+                      {autismAnnotatedImageUrl ? (
+                        <img
+                          src={autismAnnotatedImageUrl}
+                          alt="Autism Analysis Visualization"
+                          style={{
+                            width: '100%',
+                            maxWidth: '350px',
+                            height: 'auto',
+                            borderRadius: 8,
+                            border: '1px solid #f1f5f9',
+                            display: 'block',
+                            margin: '0 auto',
+                            marginBottom: 14,
+                          }}
+                        />
+                      ) : (
+                        <Typography color="text.secondary" sx={{ mb: 2, textAlign: 'center', fontStyle: 'italic' }}>
+                          {backendMessage && backendMessage.toLowerCase().includes('adult') 
+                            ? 'Autism analysis not available for adult subjects' 
+                            : 'Autism analysis visualization will appear here'
+                          }
+                        </Typography>
+                      )}
+
+                      {/* Autism regional analysis results */}
+                      {autismAnalysis.results && autismAnalysis.results.length > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                            Regional Analysis:
+                          </Typography>
+                          {autismAnalysis.results.filter(r => r.region).map((r, idx) => (
+                            <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p: 1, bgcolor: 'white', border: '1px solid #e0e7ef', borderRadius: 1 }}>
+                              <Typography variant="body2"><strong>{r.region}:</strong> {r.label}</Typography>
+                              <ConfidenceLevel confidence={r.confidence} />
+                            </Box>
+                          ))}
+                          {autismAnalysis.results.find(r => r.final_decision) && (
+                            <Box sx={{ bgcolor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 2, p: 2, mt: 2, textAlign: 'center' }}>
+                              <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                                Final AI Decision
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#dc2626', fontWeight: 700 }}>
+                                {autismAnalysis.results.find(r => r.final_decision)?.final_decision}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+              {/* Show processing spinner if analyzing */}
+              { isProcessing && (
+                <Box textAlign="center" py={3}>
+                  <CircularProgress size={40} />
+                  <Typography sx={{ mt: 2 }}>Processing image...</Typography>
+                </Box>
+              )}
+            </Grid>
+          </Grid>
+
+          {/* Footer */}
+          <Box textAlign="center" mt={6}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Developed by Prasant Gupta And Team
+            </Typography>
+          </Box>
+        </Container>
+      </Box>
+
+      {/* Snackbar for messages */}
+      <Snackbar open={snackbar.open} autoHideDuration={5000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </ThemeProvider>
   );
 }
 
-export default App; 
+export default App;
